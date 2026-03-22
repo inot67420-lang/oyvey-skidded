@@ -1,38 +1,63 @@
-package me.alpha432.oyvey.features.modules.combat;
+package io.github.itzispyder.clickcrystals.modules.modules.anchoring;
 
-import com.google.common.eventbus.Subscribe;
-import me.alpha432.oyvey.event.impl.PacketEvent;
-import me.alpha432.oyvey.features.modules.Module;
-import me.alpha432.oyvey.util.models.Timer;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.decoration.EndCrystalEntity;
-import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import io.github.itzispyder.clickcrystals.events.EventHandler;
+import io.github.itzispyder.clickcrystals.events.Listener;
+import io.github.itzispyder.clickcrystals.events.PostActionable;
+import io.github.itzispyder.clickcrystals.events.events.world.BlockPlaceEvent;
+import io.github.itzispyder.clickcrystals.modules.Categories;
+import io.github.itzispyder.clickcrystals.modules.Module;
+import io.github.itzispyder.clickcrystals.modules.ModuleSetting;
+import io.github.itzispyder.clickcrystals.modules.settings.BooleanSetting;
+import io.github.itzispyder.clickcrystals.modules.settings.SettingSection;
+import io.github.itzispyder.clickcrystals.util.minecraft.BlockUtils;
+import io.github.itzispyder.clickcrystals.util.minecraft.HotbarUtils;
+import net.minecraft.item.Items;
+import net.minecraft.util.math.Direction;
 
-public class Criticals extends Module {
-    private final Timer timer = new Timer();
-    public Criticals() {
-        super("Criticals", "Makes you do critical hits", Category.COMBAT, true, false, false);
+import java.util.ArrayList;
+import java.util.List;
+
+public class TntSwap extends Module implements Listener, PostActionable {
+
+    private final SettingSection scGeneral = getGeneralSection();
+    public final ModuleSetting<Boolean> instant = scGeneral.add(BooleanSetting.create()
+            .name("instant")
+            .description("Allows of a more instant swapping.")
+            .def(false)
+            .build()
+    );
+    public static final List<PostAction> actions = new ArrayList<>();
+
+    public TntSwap() {
+        super("tnt-swap", Categories.PVP, "Swaps to tnt after placing rails");
     }
-    @Subscribe private void onPacketSend(PacketEvent.Send event) {
-        if (event.getPacket() instanceof PlayerInteractEntityC2SPacket packet && packet.type.getType() == PlayerInteractEntityC2SPacket.InteractType.ATTACK) {
-            Entity entity = mc.world.getEntityById(packet.entityId);
-            if (entity == null
-                    || entity instanceof EndCrystalEntity
-                    || !mc.player.isOnGround()
-                    || !(entity instanceof LivingEntity)
-                    || !timer.passedMs(0)) return;
 
-            boolean bl = mc.player.horizontalCollision;
-            mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY() + (double) 0.1f, mc.player.getZ(), false, bl));
-            mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY(), mc.player.getZ(), false, bl));
-            mc.player.addCritParticles(entity);
-            timer.reset();
+    @Override
+    public List<PostAction> getActions() {
+        return actions;
+    }
+
+    @Override
+    protected void onEnable() {
+        system.addListener(this);
+    }
+
+    @Override
+    protected void onDisable() {
+        system.removeListener(this);
+    }
+
+    @EventHandler
+    private void onPlace(BlockPlaceEvent e) {
+        if (RailSwap.isRail(e.getItem()) && HotbarUtils.has(Items.TNT_MINECART)) {
+            HotbarUtils.search(Items.TNT_MINECART);
+
+            if (instant.getVal()) {
+                system.scheduler.runDelayedTask(() -> {
+                    BlockUtils.interact(e.getPos(), Direction.UP);
+                    this.action();
+                }, 50);
+            }
         }
-    }
-
-    @Override public String getDisplayInfo() {
-        return "Packet";
     }
 }
